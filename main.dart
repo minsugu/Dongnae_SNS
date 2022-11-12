@@ -1,12 +1,30 @@
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dongnae/auth_servide.dart';
+import 'package:dongnae/home_page.dart';
 import 'package:dongnae/signupup.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:logger/logger.dart';
+import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+void openSnackbar() {
+  Get.snackbar(
+    'Snackbar',
+    'This is a snackbar',
+    snackPosition: SnackPosition.BOTTOM,
+    forwardAnimationCurve: Curves.elasticInOut,
+    reverseAnimationCurve: Curves.easeOut,
+  );
+}
+
+
 
 void main() async {
+
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
@@ -15,6 +33,8 @@ void main() async {
 }
 class MyApp extends StatelessWidget {
   @override
+  var logger = Logger();
+
   Widget build(BuildContext context) {
     return MaterialApp(
 
@@ -40,24 +60,27 @@ class LogIn extends StatefulWidget {
 }
 
 class _LogInState extends State<LogIn> {
-  final _authentication = FirebaseAuth.instance;
-/*
-  final _formKey = GlobalKey<FormState>();
-  String userName = '';
-  String userEmail = '';
-  String userPassword = '';
 
-  void _tryValidation() {
-    final isValid = _formKey.currentState!.validate();
-    if (isValid) {
-      _formKey.currentState!.save();
-    }
-  }*/
+  FirebaseFirestore firestore=FirebaseFirestore.instance;
+  final _formkey = GlobalKey<FormState>();
+  String name = '';
+  String email = '';
+  String password = '';
+
+
+
   @override
   Widget build(BuildContext context) {
 
-    return SingleChildScrollView(
+    void _tryValidation() {
+      final isValid = _formkey.currentState!.validate();
+      if(isValid){
+        _formkey.currentState!.save();
+      }
+    }
 
+    return SingleChildScrollView(
+      
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
 
@@ -94,43 +117,107 @@ class _LogInState extends State<LogIn> {
                 ),
 
               padding: EdgeInsets.all(40.0),
-              child: Column(
-                children: [
+              child: Form(
+                key: _formkey,
+                child: Column(
+                children: <Widget>[
                   TextFormField(
-                    key: ValueKey(1),
+                    keyboardType: TextInputType.emailAddress,
+                    key :ValueKey(1),
                     validator: (value){
-
-                      if(value!.isEmpty){
-                        return '제발 살려줘 제발';
+                      if(value!.isEmpty || !value.contains('@')){
+                        return '올바른 이메일형식이 아니에요';
                       }
                       return null;
+                    },
+                    onSaved: (value){
+                      email = value!;
+                    },
+                    onChanged: (value){
+                      email=value;
                     },
                     decoration: InputDecoration(
                         labelText: '이메일을 입력하세요'
                     ),
-                    keyboardType: TextInputType.emailAddress,
+
                   ),
-                  TextField(
-                    decoration: InputDecoration(
-                        labelText: '비밀번호를 입력하세요'
-                    ),
+                  TextFormField(
                     keyboardType: TextInputType.text,
                     obscureText: true,
+                    key: ValueKey(3),
+                    validator: (value){
+                      if(value!.isEmpty || value.length<8){
+                        return '패스워드가 너무 짧거나 틀렸어요';
+                      }
+                      return null;
+                    },
+                    onSaved: (value){
+                      password=value!;
+                    },
+                    onChanged: (value){
+                      password=value;
+                    },
+                    decoration: InputDecoration(
+                        labelText: '비밀번호를 입력하세요',
+                    ),
+
                   ),
                   SizedBox(
                     height:40,
-                  ),Container(child:
-                  ElevatedButton(
-                    onPressed: (){},
-                    child: Text('Sign IN',style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontFamily: 'tmoney'
-                    )),
-                    style: ButtonStyle(backgroundColor: MaterialStateProperty.all(Colors.deepOrangeAccent),
-                        minimumSize: MaterialStateProperty.all(Size(150, 40)),
-
-                        padding: MaterialStateProperty.all(EdgeInsets.fromLTRB(0, 10, 0, 0))),
-                  ),margin: EdgeInsets.all(10),),
+                  ),Container(margin: EdgeInsets.all(10),child:
+                  GestureDetector(
+                      onTap: () async {
+                        try {
+                          UserCredential userCredential = await FirebaseAuth.instance
+                              .signInWithEmailAndPassword(
+                              email: email,
+                              password: password) //아이디와 비밀번호로 로그인 시도
+                              .then((value) {
+                            print(value);
+                            value.user!.emailVerified == true //이메일 인증 여부
+                                ? Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => HomePage()))
+                                : print('이메일 확인 안댐');
+                            return value;
+                          });
+                        } on FirebaseAuthException catch (e) {
+                          //로그인 예외처리
+                          if (e.code == 'user-not-found') {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('등록된 이메일이 아니에요.'),
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+                          } else if (e.code == 'wrong-password') {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('비밀번호가 틀려요.'),
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+                          } else {
+                            _tryValidation();
+                          }
+                        }
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.deepOrangeAccent,
+                            borderRadius: BorderRadius.circular(4)),
+                        width: 150,
+                        height: 40,
+                        child: Center(
+                          child: Text(
+                            'Sign IN',
+                            style: TextStyle(color: Colors.white,
+                            fontFamily: 'tmoney',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        //color: Colors.deepOrange,
+                      )),),
                   ElevatedButton(
                     onPressed: (
                         ){
@@ -141,14 +228,15 @@ class _LogInState extends State<LogIn> {
                         //SignUp
                       );
                     },
-                    child: Text('Sign UP',style: TextStyle(
-                        fontFamily: 'tmoney',
-                        fontWeight: FontWeight.w700
-                    )),
                     style: ButtonStyle(backgroundColor: MaterialStateProperty.all(Colors.deepOrangeAccent),
                         minimumSize: MaterialStateProperty.all(Size(150, 40)),
 
                         padding: MaterialStateProperty.all(EdgeInsets.fromLTRB(0, 10, 0, 0))),
+                    child: Text('Sign UP',style: TextStyle(
+                        fontFamily: 'tmoney',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700
+                    )),
                   ),
                     InkWell(
                       onTap: (){
@@ -165,7 +253,7 @@ class _LogInState extends State<LogIn> {
                         padding: EdgeInsets.all(1),
                         margin: EdgeInsets.only(top: 30),
                         decoration: BoxDecoration(
-                            image:DecorationImage(image: AssetImage('assets/google.png'),
+                            image:DecorationImage(image: AssetImage('assets/images/google.png'),
 
                         alignment: Alignment.topLeft),
                         border: Border.all(),borderRadius: BorderRadius.circular(6)
@@ -186,13 +274,13 @@ class _LogInState extends State<LogIn> {
                         fontSize: 30,
 
                       ),)),)*/
-                ],
-              ),
+                
+              ]),
             ),),
           ),
-        ],
+        
       ),
-    );
+    ]));
   }
 }
 

@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:dongnae/main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:logger/logger.dart';
+import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'logger.dart';
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
   Firebase.initializeApp();
@@ -11,10 +15,13 @@ void main() async{
 
 
 class Sign_up extends StatelessWidget {
+
+
   const Sign_up({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    var logger = Logger();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
 
@@ -24,13 +31,13 @@ class Sign_up extends StatelessWidget {
           scaffoldBackgroundColor:Colors.greenAccent
       ),
       home: Scaffold( appBar: AppBar(
-          title: Text('우리동네 깐부찾기',
+          title: Text('회원가입',
               style: TextStyle(fontSize: 20,
                   fontFamily:'tmonry')),
           backgroundColor: Colors.green,
           centerTitle: true,
           leading: IconButton(
-            icon:Icon(Icons.backspace_outlined),
+            icon:Icon(Icons.keyboard_backspace_outlined,size: 30),
             onPressed: (){Navigator.pop(context);
             Navigator.push(context, MaterialPageRoute(builder: (context) => MyApp()),);},
           )
@@ -52,11 +59,11 @@ class Signup_bodyState extends State<Signup_body>{
 
   final _formkey = GlobalKey<FormState>();
   String userName='';
-  String userEmail = '';
-  String userPassword = '';
+  String email = '';
+  String password = '';
 
-
-  @override
+  CollectionReference product = FirebaseFirestore.instance.collection('User_info');
+ @override
   Widget build(BuildContext context) {
 
 
@@ -139,10 +146,10 @@ class Signup_bodyState extends State<Signup_body>{
                         return null;
                       },
                       onSaved: (value){
-                        userEmail = value!;
+                        email = value!;
                       },
                       onChanged: (value){
-                        userEmail=value;
+                        email=value;
                       },
                       decoration: InputDecoration(
                           labelText: '이메일을 입력하세요'
@@ -160,10 +167,10 @@ class Signup_bodyState extends State<Signup_body>{
                         return null;
                       },
                       onSaved: (value){
-                        userPassword=value!;
+                        password=value!;
                       },
                       onChanged: (value){
-                        userPassword=value;
+                        password=value;
                       },
                       decoration: InputDecoration(
                           labelText: '비밀번호를 입력하세요',
@@ -174,7 +181,7 @@ class Signup_bodyState extends State<Signup_body>{
                     TextFormField(
                       key: ValueKey(4),
                       validator: (value){
-                        if(value!.isEmpty ||value != userPassword){
+                        if(value!.isEmpty ||value != password){
                           return '비밀번호가 일치하지 않습니다.';
                         }
                       },
@@ -187,28 +194,47 @@ class Signup_bodyState extends State<Signup_body>{
                     SizedBox(
                       height:40,
                     ),Container(child:
-                    ElevatedButton(
-                      onPressed: (
-                          ){
+                    GestureDetector(
+                        onTap: () async {
+                          try {
+                            UserCredential userCredential = await FirebaseAuth.instance
+                                .createUserWithEmailAndPassword(
+                                email: email,
+                                password: password)
+                                .then((value) {
+                              if (value.user!.email == null) {
+                              } else {
+                                  Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) =>MyApp())
+                              );
+                              }
+                              return value;
+                            });
+                            FirebaseAuth.instance.currentUser?.sendEmailVerification();
+                          } on FirebaseAuthException catch (e) {
+                            if (e.code == 'weak-password') {
+                              print('the password provided is too weak');
+                            } else if (e.code == 'email-already-in-use') {
+                              print('The account already exists for that email.');
+                            } else {
+                              _tryValidation();
+                            }
+                          } catch (e) {
+                            print('끝');
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(5),
+                            color: Colors.deepOrangeAccent,
+                          ),
+                          width: 328,
+                          height: 48,
 
-                        if (_formkey.currentState!.validate()) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(
-                              content: Text('회원가입 완료 다시 진행해주세요 ')));
-
-                          Navigator.pop(context);
-                      }
-                      },
-                      child: Text('Sign UP',style: TextStyle(
-                          fontFamily: 'tmoney'
-                      )),
-                      style: ButtonStyle(backgroundColor: MaterialStateProperty.all(Colors.amber),
-                          minimumSize: MaterialStateProperty.all(Size(150, 40)),
-
-                          padding: MaterialStateProperty.all(EdgeInsets.fromLTRB(0, 10, 0, 0))),
+                          child: Center(child: Text('회원가입')),
+                        ))
                     ),
-                    ),ElevatedButton(onPressed:(){}, child: Text('Google')),
-
                     Container(width: double.infinity,
                       padding:EdgeInsets.fromLTRB(0, 50,0,0),
                       height: 150,child: Container(color: Colors.blue,child:
@@ -228,3 +254,24 @@ class Signup_bodyState extends State<Signup_body>{
   }
 }
 
+class AuthManage{
+  /// 회원가입
+  Future<bool> createUser(String email, String pw) async{
+    try {
+      final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: pw,
+      );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'weak-password') {
+        logger.w('The password provided is too weak.');
+      } else if (e.code == 'email-already-in-use') {
+        logger.w('The account already exists for that email.');
+      }
+    } catch (e) {
+      logger.e(e);
+      return false;
+    }
+    // authPersistence(); // 인증 영속
+    return true;
+  }}
